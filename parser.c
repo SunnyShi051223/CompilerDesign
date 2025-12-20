@@ -1,182 +1,352 @@
-//
-// Created by 32874 on 2025/12/20.
-//
-
 /* parser.c */
 #include "parser.h"
 #include "lexer.h"
 #include "semantic.h"
 
 // 动作类型
-#define ACT_ERR 0
-#define ACT_SHIFT 1
-#define ACT_REDUCE 2
-#define ACT_ACC 3
+#define SHIFT 1
+#define REDUCE 2
+#define ACC   3
+#define ERR   0
 
-// 产生式编号宏
-#define P_S_ASSIGN 1  // S -> id = num; (简化)
-#define P_S_IF     2  // S -> if ( C ) M S
-#define P_C_RELOP  3  // C -> id relop id
-#define P_M_EPS    4  // M -> epsilon
+// --- 产生式编号 ---
+// 1: S -> id = E ;
+// 2: S -> if ( C ) M S
+// 3: S -> if ( C ) M S N else M S
+// 4: S -> { L }
+// 5: L -> L M S
+// 6: L -> S
+// 7: E -> E + T
+// 8: E -> T
+// 9: T -> id
+// 10: T -> num
+// 11: C -> T relop T
+// 12: M -> eps
+// 13: N -> eps
+#define PROD_COUNT 14
 
 typedef struct {
-    int type; // SHIFT/REDUCE
-    int val;  // NextState or ProductionIndex
-} Action;
+    int lhs; // 左部非终结符ID
+    int len; // 右部长度
+} Production;
 
-// 栈
+Production prods[PROD_COUNT];
+
+// --- 分析表 ---
+typedef struct {
+    int type; // SHIFT/REDUCE/ACC/ERR
+    int val;  // State ID 或 Production ID
+} ActionEntry;
+
+ActionEntry actionTable[MAX_STATES][MAX_TOKENS];
+int gotoTable[MAX_STATES][8]; // 8个非终结符
+
+// --- 栈 ---
 int stateStack[MAX_STACK];
 SemNode symStack[MAX_STACK];
 int top = 0;
 
-// --- 模拟分析表 (仅针对 demo 用例: if ( a > b ) x = 1 ;) ---
-// 真实课设中，这个表应该是 50x20 的大数组
-Action getAction(int state, TokenType tok) {
-    Action a = {ACT_ERR, 0};
+// --- 初始化函数 ---
+void setProd(int id, int lhs, int len) { prods[id].lhs = lhs; prods[id].len = len; }
+void setAction(int s, TokenType t, int type, int val) { actionTable[s][t].type = type; actionTable[s][t].val = val; }
+void setGoto(int s, int nt, int next) { gotoTable[s][nt] = next; }
 
-    // 状态 0: Start. 期待 'if' 或 'id'
-    if (state == 0 && tok == TOK_IF) { a.type = ACT_SHIFT; a.val = 2; return a; }
+// --- 填充分析表 (C语言子集) ---
+void initParser() {
+    // 1. 初始化产生式信息
+    setProd(1, 1, 4); // S -> id = E ;
+    setProd(2, 1, 6); // S -> if ( C ) M S
+    setProd(3, 1, 10); // S -> if ( C ) M S N else M S
+    setProd(4, 1, 3); // S -> { L }
+    setProd(5, 2, 3); // L -> L M S
+    setProd(6, 2, 1); // L -> S
+    setProd(7, 3, 3); // E -> E + T
+    setProd(8, 3, 1); // E -> T
+    setProd(9, 4, 1); // T -> id
+    setProd(10, 4, 1); // T -> num
+    setProd(11, 5, 3); // C -> T relop T
+    setProd(12, 6, 0); // M -> eps
+    setProd(13, 7, 0); // N -> eps
 
-    // 状态 2: 读了 'if'，期待 '('
-    if (state == 2 && tok == TOK_LPAREN) { a.type = ACT_SHIFT; a.val = 3; return a; }
+    // 2. 初始化表格 (清零)
+    memset(actionTable, 0, sizeof(actionTable));
+    memset(gotoTable, 0, sizeof(gotoTable));
 
-    // 状态 3: 读了 '(', 期待 'id' (进入条件 C)
-    if (state == 3 && tok == TOK_ID) { a.type = ACT_SHIFT; a.val = 4; return a; }
+    // --- State 0: Start ---
+    setAction(0, TOK_IF, SHIFT, 2);
+    setAction(0, TOK_LBRACE, SHIFT, 3);
+    setAction(0, TOK_ID, SHIFT, 4);
+    setGoto(0, 1, 1); // S -> 1
 
-    // 状态 4: 读了 'id', 期待 'relop'
-    if (state == 4 && tok == TOK_RELOP) { a.type = ACT_SHIFT; a.val = 5; return a; }
+    // State 1: ACC
+    setAction(1, TOK_END, ACC, 0);
 
-    // 状态 5: 读了 'relop', 期待 'id'
-    if (state == 5 && tok == TOK_ID) { a.type = ACT_SHIFT; a.val = 6; return a; }
+    // --- S -> if ... ---
+    // State 2: if (
+    setAction(2, TOK_LPAREN, SHIFT, 5);
 
-    // 状态 6: 读了 id > id. 此时应该归约 C -> id relop id
-    // 这里因为是 SLR，要看 FOLLOW 集，假设下一个是 ')'，则归约
-    if (state == 6 && tok == TOK_RPAREN) { a.type = ACT_REDUCE; a.val = P_C_RELOP; return a; }
+    // State 5: if ( C
+    setAction(5, TOK_ID, SHIFT, 6);
+    setAction(5, TOK_NUM, SHIFT, 7);
+    setGoto(5, 5, 8); // C -> 8
+    setGoto(5, 4, 9); // T -> 9
 
-    // 状态 7 (GOTO C后): 读了 C，期待 ')'
-    if (state == 7 && tok == TOK_RPAREN) { a.type = ACT_SHIFT; a.val = 8; return a; }
+    // State 6: id (as T)
+    setAction(6, TOK_RELOP, REDUCE, 9);
+    setAction(6, TOK_RPAREN, REDUCE, 9);
+    setAction(6, TOK_PLUS, REDUCE, 9);
+    setAction(6, TOK_SEMI, REDUCE, 9);
 
-    // 状态 8: 读了 ')', 此时需要 M -> epsilon.
-    // SLR表中，如果下一个是 id 或 if (S的开头)，则先归约 M
-    if (state == 8 && tok == TOK_ID) { a.type = ACT_REDUCE; a.val = P_M_EPS; return a; }
+    // State 7: num (as T)
+    setAction(7, TOK_RELOP, REDUCE, 10);
+    setAction(7, TOK_RPAREN, REDUCE, 10);
+    setAction(7, TOK_PLUS, REDUCE, 10);
+    setAction(7, TOK_SEMI, REDUCE, 10);
 
-    // 状态 9 (GOTO M后): 期待 S (这里简化为只接受 x=1)
-    if (state == 9 && tok == TOK_ID) { a.type = ACT_SHIFT; a.val = 10; return a; } // id
+    // State 9: T relop ...
+    setAction(9, TOK_RELOP, SHIFT, 10);
 
-    // 状态 10: x, 期待 =
-    if (state == 10 && tok == TOK_ASSIGN) { a.type = ACT_SHIFT; a.val = 11; return a; }
+    // State 10: T relop T
+    setAction(10, TOK_ID, SHIFT, 6);
+    setAction(10, TOK_NUM, SHIFT, 7);
+    setGoto(10, 4, 11); // T -> 11
 
-    // 状态 11: =, 期待 num
-    if (state == 11 && tok == TOK_NUM) { a.type = ACT_SHIFT; a.val = 12; return a; }
+    // State 11: T relop T . -> Reduce C
+    setAction(11, TOK_RPAREN, REDUCE, 11);
 
-    // 状态 12: num, 期待 ;
-    if (state == 12 && tok == TOK_SEMI) { a.type = ACT_SHIFT; a.val = 13; return a; }
+    // State 8: if ( C )
+    setAction(8, TOK_RPAREN, SHIFT, 12);
 
-    // 状态 13: ;, 归约 S -> id = num ;
-    if (state == 13 && (tok == TOK_END || tok == TOK_ELSE)) { a.type = ACT_REDUCE; a.val = P_S_ASSIGN; return a; }
+    // State 12: if ( C ) . M
+    setAction(12, TOK_LBRACE, REDUCE, 12);
+    setAction(12, TOK_ID, REDUCE, 12);
+    setAction(12, TOK_IF, REDUCE, 12);
+    setGoto(12, 6, 13); // M -> 13
 
-    // 状态 14 (GOTO S后): 归约 S -> if ( C ) M S
-    if (state == 14 && tok == TOK_END) { a.type = ACT_REDUCE; a.val = P_S_IF; return a; }
+    // State 13: if ( C ) M . S
+    setAction(13, TOK_IF, SHIFT, 2);
+    setAction(13, TOK_LBRACE, SHIFT, 3);
+    setAction(13, TOK_ID, SHIFT, 4);
+    setGoto(13, 1, 14); // S -> 14
 
-    // 接受
-    if (state == 1 && tok == TOK_END) { a.type = ACT_ACC; return a; }
+    // State 14: if ( C ) M S .
+    setAction(14, TOK_ELSE, REDUCE, 13); // Reduce N->eps
+    setAction(14, TOK_SEMI, REDUCE, 2);
+    setAction(14, TOK_RBRACE, REDUCE, 2);
+    setAction(14, TOK_END, REDUCE, 2);
+    setGoto(14, 7, 15); // N -> 15
 
-    return a;
-}
+    // State 15: ... N . else
+    setAction(15, TOK_ELSE, SHIFT, 16);
 
-// GOTO 表
-int getGoto(int state, int nonTerminal) {
-    // 0: C, 1: M, 2: S
-    if (state == 3 && nonTerminal == 0) return 7;  // 3 + C -> 7
-    if (state == 8 && nonTerminal == 1) return 9;  // 8 + M -> 9
-    if (state == 9 && nonTerminal == 2) return 14; // 9 + S -> 14
-    if (state == 0 && nonTerminal == 2) return 1;  // 0 + S -> 1 (ACC state)
-    return 0;
+    // State 16: else M
+    setAction(16, TOK_LBRACE, REDUCE, 12);
+    setAction(16, TOK_ID, REDUCE, 12);
+    setAction(16, TOK_IF, REDUCE, 12);
+    setGoto(16, 6, 17); // M -> 17
+
+    // State 17: else M . S
+    setAction(17, TOK_IF, SHIFT, 2);
+    setAction(17, TOK_LBRACE, SHIFT, 3);
+    setAction(17, TOK_ID, SHIFT, 4);
+    setGoto(17, 1, 18); // S -> 18
+
+    // State 18: ... else M S .
+    setAction(18, TOK_SEMI, REDUCE, 3);
+    setAction(18, TOK_RBRACE, REDUCE, 3);
+    setAction(18, TOK_END, REDUCE, 3);
+
+    // --- S -> { L } ---
+    // State 3: {
+    setAction(3, TOK_IF, SHIFT, 2);
+    setAction(3, TOK_ID, SHIFT, 4);
+    setAction(3, TOK_LBRACE, SHIFT, 3);
+    setGoto(3, 2, 19); // L -> 19
+    setGoto(3, 1, 20); // S -> 20
+
+    // State 20: L -> S .
+    setAction(20, TOK_RBRACE, REDUCE, 6);
+    setAction(20, TOK_ID, REDUCE, 6);
+    setAction(20, TOK_IF, REDUCE, 6);
+
+    // State 19: { L . } or { L . M S }
+    setAction(19, TOK_RBRACE, SHIFT, 21);
+    setAction(19, TOK_ID, REDUCE, 12);
+    setAction(19, TOK_IF, REDUCE, 12);
+    setGoto(19, 6, 22); // M -> 22
+
+    // State 21: { L } .
+    setAction(21, TOK_SEMI, REDUCE, 4);
+    setAction(21, TOK_ELSE, REDUCE, 4);
+    setAction(21, TOK_RBRACE, REDUCE, 4);
+    setAction(21, TOK_END, REDUCE, 4);
+
+    // State 22: L M . S
+    setAction(22, TOK_IF, SHIFT, 2);
+    setAction(22, TOK_ID, SHIFT, 4);
+    setGoto(22, 1, 23); // S -> 23
+
+    // State 23: L M S .
+    setAction(23, TOK_RBRACE, REDUCE, 5);
+    setAction(23, TOK_ID, REDUCE, 5);
+    setAction(23, TOK_IF, REDUCE, 5);
+
+    // --- S -> id = E ; ---
+    // State 4: id =
+    setAction(4, TOK_ASSIGN, SHIFT, 24);
+
+    // State 24: id = E
+    setAction(24, TOK_ID, SHIFT, 26);
+    setAction(24, TOK_NUM, SHIFT, 27);
+    setGoto(24, 3, 25); // E -> 25
+    setGoto(24, 4, 28); // T -> 28
+
+    // State 26: id (as T)
+    setAction(26, TOK_PLUS, REDUCE, 9);
+    setAction(26, TOK_SEMI, REDUCE, 9);
+    setAction(26, TOK_RPAREN, REDUCE, 9);
+
+    // State 27: num (as T)
+    setAction(27, TOK_PLUS, REDUCE, 10);
+    setAction(27, TOK_SEMI, REDUCE, 10);
+    setAction(27, TOK_RPAREN, REDUCE, 10);
+
+    // State 28: E -> T .
+    setAction(28, TOK_PLUS, REDUCE, 8);
+    setAction(28, TOK_SEMI, REDUCE, 8);
+
+    // State 25: id = E . ; or +
+    setAction(25, TOK_SEMI, SHIFT, 29);
+    setAction(25, TOK_PLUS, SHIFT, 30);
+
+    // State 30: E + T
+    setAction(30, TOK_ID, SHIFT, 26);
+    setAction(30, TOK_NUM, SHIFT, 27);
+    setGoto(30, 4, 31); // T -> 31
+
+    // State 31: E + T .
+    setAction(31, TOK_SEMI, REDUCE, 7);
+    setAction(31, TOK_PLUS, REDUCE, 7);
+
+    // State 29: id = E ; .
+    setAction(29, TOK_ELSE, REDUCE, 1);
+    setAction(29, TOK_RBRACE, REDUCE, 1);
+    setAction(29, TOK_SEMI, REDUCE, 1);
+    setAction(29, TOK_END, REDUCE, 1);
+    setAction(29, TOK_IF, REDUCE, 1);
+    setAction(29, TOK_ID, REDUCE, 1);
 }
 
 void SLR1_Parser() {
+    initParser();
     stateStack[top] = 0;
     Token token = getToken();
 
-    printf("Starting Parser...\n");
+    printf("Starting Table-Driven Parser...\n");
 
     while(1) {
         int s = stateStack[top];
-        Action act = getAction(s, token.type);
+        ActionEntry act = actionTable[s][token.type];
 
-        if (act.type == ACT_SHIFT) {
-            printf("SHIFT to %d, Token: %s\n", act.val, token.value);
+        if (act.type == SHIFT) {
+            printf("SHIFT  %-5s -> State %d\n", token.value, act.val);
             top++;
             stateStack[top] = act.val;
-
-            // 将 Token 信息保存到语义栈
             strcpy(symStack[top].name, token.value);
-            // 清空列表
+            // 清空属性列表
             symStack[top].tl_count = symStack[top].fl_count = symStack[top].nl_count = 0;
-
             token = getToken();
         }
-        else if (act.type == ACT_REDUCE) {
-            printf("REDUCE by Prod %d\n", act.val);
-
-            SemNode newVal; // 新生成的非终结符属性
-            newVal.tl_count = newVal.fl_count = newVal.nl_count = 0;
-            int popLen = 0;
-            int nonTerm = 0; // 0:C, 1:M, 2:S
+        else if (act.type == REDUCE) {
+            int prodID = act.val;
+            int lhs = prods[prodID].lhs;
+            int len = prods[prodID].len;
+            printf("REDUCE Rule %d\n", prodID);
 
             // --- 语义动作 ---
-            switch(act.val) {
-                case P_C_RELOP: // C -> id relop id
-                    popLen = 3; nonTerm = 0;
-                    // 栈: id(top-2), relop(top-1), id(top)
-                    makeList(&newVal, NXQ, 0);   // TrueList
-                    makeList(&newVal, NXQ+1, 1); // FalseList
-                    emit("j>", symStack[top-2].name, symStack[top].name, 0, 1);
+            SemNode newVal;
+            newVal.tl_count = newVal.fl_count = newVal.nl_count = 0;
+
+            switch(prodID) {
+                case 1: // S -> id = E ;
+                    // FIX: Arg1 取 top-1 (E.name), 而不是 top-2 (=)
+                    emit("=", symStack[top-1].name, "-", 0, 0);
+                    sprintf(quadArray[NXQ-1].arg2, "%s", symStack[top-3].name);
+                    break;
+                case 2: // S -> if ( C ) M S
+                    backpatch(symStack[top-3].trueList, symStack[top-3].tl_count, symStack[top-1].quad);
+                    backpatch(symStack[top-3].falseList, symStack[top-3].fl_count, NXQ);
+                    mergeList(newVal.nextList, &newVal.nl_count, symStack[top].nextList, symStack[top].nl_count);
+                    break;
+                case 3: // S -> if ( C ) M S N else M S
+                {
+                    int iC = top-7; int iM1 = top-5; int iS1 = top-4;
+                    int iN = top-3; int iM2 = top-1; int iS2 = top;
+                    backpatch(symStack[iC].trueList, symStack[iC].tl_count, symStack[iM1].quad);
+                    backpatch(symStack[iC].falseList, symStack[iC].fl_count, symStack[iM2].quad);
+                    mergeList(newVal.nextList, &newVal.nl_count, symStack[iS1].nextList, symStack[iS1].nl_count);
+                    mergeList(newVal.nextList, &newVal.nl_count, symStack[iN].nextList, symStack[iN].nl_count);
+                    mergeList(newVal.nextList, &newVal.nl_count, symStack[iS2].nextList, symStack[iS2].nl_count);
+                    backpatch(symStack[iN].nextList, symStack[iN].nl_count, NXQ);
+                }
+                    break;
+                case 4: // S -> { L }
+                    mergeList(newVal.nextList, &newVal.nl_count, symStack[top-1].nextList, symStack[top-1].nl_count);
+                    break;
+                case 5: // L -> L M S
+                    backpatch(symStack[top-2].nextList, symStack[top-2].nl_count, symStack[top-1].quad);
+                    mergeList(newVal.nextList, &newVal.nl_count, symStack[top].nextList, symStack[top].nl_count);
+                    break;
+                case 6: // L -> S
+                    mergeList(newVal.nextList, &newVal.nl_count, symStack[top].nextList, symStack[top].nl_count);
+                    break;
+                case 7: // E -> E + T
+                    strcpy(newVal.name, newTemp());
+                    emit("+", symStack[top-2].name, symStack[top].name, 0, 0);
+                    sprintf(quadArray[NXQ-1].arg2, "%s", newVal.name);
+                    break;
+                case 8: // E -> T
+                    strcpy(newVal.name, symStack[top].name);
+                    break;
+                case 9: // T -> id
+                case 10: // T -> num
+                    strcpy(newVal.name, symStack[top].name);
+                    break;
+                case 11: // C -> T relop T
+                    makeList(&newVal, NXQ, 0);
+                    makeList(&newVal, NXQ+1, 1);
+                    emit("j", symStack[top-2].name, symStack[top].name, 0, 1);
+                    // FIX: 修改 NXQ-1 (刚生成的指令)，而不是 NXQ-2
+                    char op[5]; sprintf(op, "j%s", symStack[top-1].name);
+                    strcpy(quadArray[NXQ-1].op, op);
                     emit("j", "-", "-", 0, 1);
                     break;
-
-                case P_M_EPS: // M -> epsilon
-                    popLen = 0; nonTerm = 1;
-                    newVal.quad = NXQ; // 记录当前指令地址
+                case 12: // M -> eps
+                    newVal.quad = NXQ;
                     break;
-
-                case P_S_ASSIGN: // S -> id = num ;
-                    popLen = 4; nonTerm = 2;
-                    // 栈: id(top-3), =(top-2), num(top-1), ;(top)
-                    emit("=", symStack[top-1].name, "-", 0, 0); // 简单赋值，result暂存为0表示占位
-                    // 修改上一句赋值的 result 为 id
-                    sprintf(quadArray[NXQ-1].arg2, "%s", symStack[top-3].name); // hack: 将arg2设为目标变量
-                    break;
-
-                case P_S_IF: // S -> if ( C ) M S
-                    popLen = 5; nonTerm = 2; // if, (, C, ), M, S (注意M是空的，不在Action栈中占位，但在逻辑上存在)
-                    // 修正：在手动SLR中，M已经归约过了，所以在栈里是：
-                    // if(top-5), ((top-4), C(top-3), )(top-2), M(top-1), S(top)
-
-                    // 回填 C.True -> M.quad
-                    backpatch(symStack[top-3].trueList, symStack[top-3].tl_count, symStack[top-1].quad);
-                    // C.False -> NXQ (假定S.next就是NXQ，这里简单处理)
-                    backpatch(symStack[top-3].falseList, symStack[top-3].fl_count, NXQ);
-
-                    mergeList(newVal.nextList, &newVal.nl_count, symStack[top].nextList, symStack[top].nl_count);
+                case 13: // N -> eps
+                    makeList(&newVal, NXQ, 2);
+                    emit("j", "-", "-", 0, 1);
                     break;
             }
 
-            // 弹栈
-            top -= popLen;
+            top -= len;
 
-            // 查 Goto 并压栈
-            int nextState = getGoto(stateStack[top], nonTerm);
+            int nextState = gotoTable[stateStack[top]][lhs];
+            if (nextState == 0 && lhs != 1) {
+                printf("GOTO Error: State %d, LHS %d\n", stateStack[top], lhs);
+                exit(1);
+            }
             top++;
             stateStack[top] = nextState;
             symStack[top] = newVal;
         }
-        else if (act.type == ACT_ACC) {
+        else if (act.type == ACC) {
             printf("Analysis Success!\n");
             return;
         }
         else {
-            printf("Syntax Error at state %d, token %s\n", s, token.value);
+            printf("Syntax Error at State %d, Token %s (Type %d)\n", s, token.value, token.type);
             exit(1);
         }
     }

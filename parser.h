@@ -5,6 +5,8 @@
 #ifndef COMPILERDESIGN_PARSER_H
 #define COMPILERDESIGN_PARSER_H
 
+void initParser();
 void SLR1_Parser();
+
 
 #endif //COMPILERDESIGN_PARSER_H

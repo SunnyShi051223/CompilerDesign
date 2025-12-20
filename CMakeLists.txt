@@ -3,7 +3,14 @@ project(CompilerDesign C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(CompilerDesign main.c
-        parser.h
+# 在这里加上 lexer.c, lexer.h, common.h, semantic.h
+add_executable(CompilerDesign
+        main.c
         parser.c
-        semantic.c)
+        parser.h
+        semantic.c
+        semantic.h
+        lexer.c
+        lexer.h
+        common.h
+)
