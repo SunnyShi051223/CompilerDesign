@@ -1,0 +1,6 @@
+# ninja log v5
+2	92	7879222558554338	CMakeFiles/CompilerDesign.dir/main.c.obj	329ea820b9ed23bd
+93	203	7879222559610631	CompilerDesign.exe	56887299aa6e7251
+4	122	7879227505162020	CMakeFiles/CompilerDesign.dir/main.c.obj	329ea820b9ed23bd
+15	132	7879227505287576	CMakeFiles/CompilerDesign.dir/semantic.c.obj	9ac792be45a900b8
+11	142	7879227505386043	CMakeFiles/CompilerDesign.dir/parser.c.obj	e953ddc59e195265

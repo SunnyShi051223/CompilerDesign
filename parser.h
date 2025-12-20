@@ -1,0 +1,10 @@
+//
+// Created by 32874 on 2025/12/20.
+//
+
+#ifndef COMPILERDESIGN_PARSER_H
+#define COMPILERDESIGN_PARSER_H
+
+void SLR1_Parser();
+
+#endif //COMPILERDESIGN_PARSER_H
