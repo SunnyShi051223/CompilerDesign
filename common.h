@@ -14,7 +14,7 @@
 #define MAX_CODE_LEN 2000
 #define MAX_STACK 500
 #define MAX_QUADS 500
-#define MAX_STATES 100  // 增加状态数上限
+#define MAX_STATES 100
 #define MAX_TOKENS 20
 
 // --- Token 定义 ---
