@@ -40,7 +40,7 @@ typedef struct {
 } ActionEntry;
 
 ActionEntry actionTable[MAX_STATES][MAX_CODE_LEN];
-int gotoTable[MAX_STATES][8]; // 8个非终结符
+int gotoTable[MAX_STATES][8];
 
 // --- 栈 ---
 int stateStack[MAX_STACK];
