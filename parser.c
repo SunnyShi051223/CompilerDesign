@@ -23,7 +23,8 @@
 // 11: C -> T relop T
 // 12: M -> eps
 // 13: N -> eps
-#define PROD_COUNT 14
+// 14: E -> E - T
+#define PROD_COUNT 15
 
 typedef struct {
     int lhs; // 左部非终结符ID
@@ -38,7 +39,7 @@ typedef struct {
     int val;  // State ID 或 Production ID
 } ActionEntry;
 
-ActionEntry actionTable[MAX_STATES][MAX_TOKENS];
+ActionEntry actionTable[MAX_STATES][MAX_CODE_LEN];
 int gotoTable[MAX_STATES][8]; // 8个非终结符
 
 // --- 栈 ---
@@ -51,7 +52,7 @@ void setProd(int id, int lhs, int len) { prods[id].lhs = lhs; prods[id].len = le
 void setAction(int s, TokenType t, int type, int val) { actionTable[s][t].type = type; actionTable[s][t].val = val; }
 void setGoto(int s, int nt, int next) { gotoTable[s][nt] = next; }
 
-// --- 填充分析表 (C语言子集) ---
+// --- 填充分析表 ---
 void initParser() {
     // 1. 初始化产生式信息
     setProd(1, 1, 4); // S -> id = E ;
@@ -67,6 +68,7 @@ void initParser() {
     setProd(11, 5, 3); // C -> T relop T
     setProd(12, 6, 0); // M -> eps
     setProd(13, 7, 0); // N -> eps
+    setProd(14, 3, 3); // E -> E - T
 
     // 2. 初始化表格 (清零)
     memset(actionTable, 0, sizeof(actionTable));
@@ -95,12 +97,14 @@ void initParser() {
     setAction(6, TOK_RELOP, REDUCE, 9);
     setAction(6, TOK_RPAREN, REDUCE, 9);
     setAction(6, TOK_PLUS, REDUCE, 9);
+    setAction(6, TOK_MINUS, REDUCE, 9);
     setAction(6, TOK_SEMI, REDUCE, 9);
 
     // State 7: num (as T)
     setAction(7, TOK_RELOP, REDUCE, 10);
     setAction(7, TOK_RPAREN, REDUCE, 10);
     setAction(7, TOK_PLUS, REDUCE, 10);
+    setAction(7, TOK_MINUS, REDUCE, 10);
     setAction(7, TOK_SEMI, REDUCE, 10);
 
     // State 9: T relop ...
@@ -131,6 +135,9 @@ void initParser() {
 
     // State 14: if ( C ) M S .
     setAction(14, TOK_ELSE, REDUCE, 13); // Reduce N->eps
+    setAction(14, TOK_IF, REDUCE, 2);     // 语句衔接
+    setAction(14, TOK_ID, REDUCE, 2);
+    setAction(14, TOK_LBRACE, REDUCE, 2);
     setAction(14, TOK_SEMI, REDUCE, 2);
     setAction(14, TOK_RBRACE, REDUCE, 2);
     setAction(14, TOK_END, REDUCE, 2);
@@ -152,6 +159,9 @@ void initParser() {
     setGoto(17, 1, 18); // S -> 18
 
     // State 18: ... else M S .
+    setAction(18, TOK_IF, REDUCE, 3); // 语句衔接
+    setAction(18, TOK_ID, REDUCE, 3);
+    setAction(18, TOK_LBRACE, REDUCE, 3);
     setAction(18, TOK_SEMI, REDUCE, 3);
     setAction(18, TOK_RBRACE, REDUCE, 3);
     setAction(18, TOK_END, REDUCE, 3);
@@ -176,6 +186,9 @@ void initParser() {
     setGoto(19, 6, 22); // M -> 22
 
     // State 21: { L } .
+    setAction(21, TOK_IF, REDUCE, 4); // 语句衔接
+    setAction(21, TOK_ID, REDUCE, 4);
+    setAction(21, TOK_LBRACE, REDUCE, 4);
     setAction(21, TOK_SEMI, REDUCE, 4);
     setAction(21, TOK_ELSE, REDUCE, 4);
     setAction(21, TOK_RBRACE, REDUCE, 4);
@@ -203,22 +216,27 @@ void initParser() {
 
     // State 26: id (as T)
     setAction(26, TOK_PLUS, REDUCE, 9);
+    setAction(26, TOK_MINUS, REDUCE, 9);
     setAction(26, TOK_SEMI, REDUCE, 9);
     setAction(26, TOK_RPAREN, REDUCE, 9);
 
     // State 27: num (as T)
     setAction(27, TOK_PLUS, REDUCE, 10);
+    setAction(27, TOK_MINUS, REDUCE, 10);
     setAction(27, TOK_SEMI, REDUCE, 10);
     setAction(27, TOK_RPAREN, REDUCE, 10);
 
     // State 28: E -> T .
     setAction(28, TOK_PLUS, REDUCE, 8);
+    setAction(28, TOK_MINUS, REDUCE, 8);
     setAction(28, TOK_SEMI, REDUCE, 8);
 
-    // State 25: id = E . ; or +
+    // State 25: id = E . ; or + or -
     setAction(25, TOK_SEMI, SHIFT, 29);
     setAction(25, TOK_PLUS, SHIFT, 30);
+    setAction(25, TOK_MINUS, SHIFT, 33);
 
+    // --- 加法 ---
     // State 30: E + T
     setAction(30, TOK_ID, SHIFT, 26);
     setAction(30, TOK_NUM, SHIFT, 27);
@@ -227,6 +245,18 @@ void initParser() {
     // State 31: E + T .
     setAction(31, TOK_SEMI, REDUCE, 7);
     setAction(31, TOK_PLUS, REDUCE, 7);
+    setAction(31, TOK_MINUS, REDUCE, 7);
+
+    // --- 减法 ---
+    // State 33: E -
+    setAction(33, TOK_ID, SHIFT, 26);
+    setAction(33, TOK_NUM, SHIFT, 27);
+    setGoto(33, 4, 34); // T -> 34
+
+    // State 34: E - T .
+    setAction(34, TOK_SEMI, REDUCE, 14);
+    setAction(34, TOK_PLUS, REDUCE, 14);
+    setAction(34, TOK_MINUS, REDUCE, 14);
 
     // State 29: id = E ; .
     setAction(29, TOK_ELSE, REDUCE, 1);
@@ -263,13 +293,11 @@ void SLR1_Parser() {
             int len = prods[prodID].len;
             printf("REDUCE Rule %d\n", prodID);
 
-            // --- 语义动作 ---
             SemNode newVal;
             newVal.tl_count = newVal.fl_count = newVal.nl_count = 0;
 
             switch(prodID) {
                 case 1: // S -> id = E ;
-                    // FIX: Arg1 取 top-1 (E.name), 而不是 top-2 (=)
                     emit("=", symStack[top-1].name, "-", 0, 0);
                     sprintf(quadArray[NXQ-1].arg2, "%s", symStack[top-3].name);
                     break;
@@ -316,7 +344,6 @@ void SLR1_Parser() {
                     makeList(&newVal, NXQ, 0);
                     makeList(&newVal, NXQ+1, 1);
                     emit("j", symStack[top-2].name, symStack[top].name, 0, 1);
-                    // FIX: 修改 NXQ-1 (刚生成的指令)，而不是 NXQ-2
                     char op[5]; sprintf(op, "j%s", symStack[top-1].name);
                     strcpy(quadArray[NXQ-1].op, op);
                     emit("j", "-", "-", 0, 1);
@@ -327,6 +354,11 @@ void SLR1_Parser() {
                 case 13: // N -> eps
                     makeList(&newVal, NXQ, 2);
                     emit("j", "-", "-", 0, 1);
+                    break;
+                case 14: // E -> E - T
+                    strcpy(newVal.name, newTemp());
+                    emit("-", symStack[top-2].name, symStack[top].name, 0, 0);
+                    sprintf(quadArray[NXQ-1].arg2, "%s", newVal.name);
                     break;
             }
 

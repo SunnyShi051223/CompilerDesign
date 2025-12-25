@@ -1,3 +1,4 @@
+/* main.c */
 #include <stdio.h>
 #include <stdlib.h>
 #include "common.h"
@@ -10,12 +11,11 @@ int main() {
     char code[MAX_CODE_LEN];
     size_t len;
 
-    // 请确保 Test.txt 在工作目录下
     fp = fopen("Test.txt", "r");
     if (fp == NULL) {
-        // 如果失败，尝试写入一个默认文件
+        // 创建默认测试用例
         fp = fopen("Test.txt", "w");
-        fprintf(fp, "if(a>b){\n    a=b;\n}\nelse{\n    if(a==b){\n        a=a+1;\n    }\n    else if(a<b){\n        b=b+1;\n    }\n}");
+        fprintf(fp, "if(a>b){\n    a=b;\n}\nelse{\n    if(a==b){\n        a=a+1;\n    }\n    else if(a<b){\n        b=b-1;\n    }\n}");
         fclose(fp);
         fp = fopen("Test.txt", "r");
         if(fp == NULL) { perror("File Error"); return 1; }
@@ -25,10 +25,27 @@ int main() {
     code[len] = '\0';
     fclose(fp);
 
-    printf("Source Code:\n%s\n\n", code);
+    printf("Source Code:\n---------------------\n%s\n---------------------\n\n", code);
 
+    // --- 1. 词法分析过程展示 (二元式输出) ---
+    printf("Step 1: Lexical Analysis (Tokens)\n");
+    printf("----------------------------------\n");
     initLexer(code);
+    Token t;
+    do {
+        t = getToken();
+        if (t.type != TOK_END)
+            printf("Token: (<Type:%d>, %s)\n", t.type, t.value);
+    } while (t.type != TOK_END);
+    printf("----------------------------------\n\n");
+
+    // --- 2. 语法分析 & 语义分析 ---
+    printf("Step 2: Syntax & Semantic Analysis\n");
+    printf("----------------------------------\n");
+    initLexer(code); // 重置
     SLR1_Parser();
+
+    // --- 3. 中间代码输出 ---
     printQuads();
 
     return 0;

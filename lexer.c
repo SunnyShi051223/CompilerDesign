@@ -1,7 +1,3 @@
-//
-// Created by 32874 on 2025/12/20.
-//
-
 #include "lexer.h"
 #include <ctype.h>
 
@@ -17,7 +13,6 @@ Token getToken() {
     Token t;
     char ch = src[pos];
 
-    // 跳过空白
     while (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
         pos++;
         ch = src[pos];
@@ -29,7 +24,6 @@ Token getToken() {
         return t;
     }
 
-    // 标识符 & 关键字
     if (isalpha(ch)) {
         int i = 0;
         while (isalnum(ch)) {
@@ -45,7 +39,6 @@ Token getToken() {
         return t;
     }
 
-    // 数字
     if (isdigit(ch)) {
         int i = 0;
         while (isdigit(ch)) {
@@ -58,7 +51,6 @@ Token getToken() {
         return t;
     }
 
-    // 符号
     pos++;
     switch (ch) {
         case '=':
@@ -68,6 +60,7 @@ Token getToken() {
         case '>': t.type = TOK_RELOP; strcpy(t.value, ">"); break;
         case '<': t.type = TOK_RELOP; strcpy(t.value, "<"); break;
         case '+': t.type = TOK_PLUS;  strcpy(t.value, "+"); break;
+        case '-': t.type = TOK_MINUS; strcpy(t.value, "-"); break;
         case '(': t.type = TOK_LPAREN; strcpy(t.value, "("); break;
         case ')': t.type = TOK_RPAREN; strcpy(t.value, ")"); break;
         case '{': t.type = TOK_LBRACE; strcpy(t.value, "{"); break;

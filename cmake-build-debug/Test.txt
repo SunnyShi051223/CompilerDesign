@@ -1,6 +1,6 @@
 if(a==b){
-   a++;
+   a=a-1;
 }
-if(b==v){
-    a++;
+else if(b==v){
+    b=a;
 }
