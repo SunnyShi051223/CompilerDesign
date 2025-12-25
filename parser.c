@@ -79,6 +79,9 @@ static void initFollowSets() {
     memset(followSet, 0, sizeof(followSet));
 #define F(nt, tok) followSet[nt][tok] = true
     F(NT_S, TOK_END); F(NT_S, TOK_ELSE); F(NT_S, TOK_RBRACE);
+    F(NT_S, TOK_ID);
+    F(NT_S, TOK_IF);
+    F(NT_S, TOK_LBRACE);
     F(NT_L, TOK_RBRACE); F(NT_L, TOK_IF); F(NT_L, TOK_ID); F(NT_L, TOK_LBRACE);
     F(NT_E, TOK_SEMI); F(NT_E, TOK_PLUS); F(NT_E, TOK_MINUS);
     F(NT_T, TOK_SEMI); F(NT_T, TOK_PLUS); F(NT_T, TOK_MINUS); F(NT_T, TOK_RELOP); F(NT_T, TOK_RPAREN);

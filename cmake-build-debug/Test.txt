@@ -1,11 +1,4 @@
-if(a>b){
-    a=b;
-}
-else{
-    if(a==b){
-        a=a+10;
-    }
-    else if(a<b){
-        b=b-12;
-    }
+{
+a = b + 1;
+c = a - 2;
 }
