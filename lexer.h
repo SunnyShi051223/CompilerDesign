@@ -8,8 +8,9 @@
 
 
 #include "common.h"
+
 void initLexer(const char *source);
 Token getToken();
-
+const char* getTokenName(int type);
 
 #endif //COMPILERDESIGN_LEXER_H

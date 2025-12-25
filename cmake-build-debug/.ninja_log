@@ -39,3 +39,15 @@
 4	96	7883642903527684	CMakeFiles/CompilerDesign.dir/main.c.obj	329ea820b9ed23bd
 9	131	7883642903879515	CMakeFiles/CompilerDesign.dir/parser.c.obj	e953ddc59e195265
 132	249	7883642904994403	CompilerDesign.exe	3fc0c15302c01826
+3	1524	7883711163604382	CMakeFiles/CompilerDesign.dir/parser.c.obj	e953ddc59e195265
+1524	2808	7883711176392452	CompilerDesign.exe	3fc0c15302c01826
+3	124	7883722939208044	CMakeFiles/CompilerDesign.dir/main.c.obj	329ea820b9ed23bd
+13	126	7883722939248074	CMakeFiles/CompilerDesign.dir/semantic.c.obj	9ac792be45a900b8
+18	137	7883722939363887	CMakeFiles/CompilerDesign.dir/lexer.c.obj	540991ebca82d2e0
+9	164	7883722939628290	CMakeFiles/CompilerDesign.dir/parser.c.obj	e953ddc59e195265
+164	299	7883722940916692	CompilerDesign.exe	3fc0c15302c01826
+17	143	7883731329773637	CMakeFiles/CompilerDesign.dir/semantic.c.obj	9ac792be45a900b8
+4	145	7883731329783665	CMakeFiles/CompilerDesign.dir/main.c.obj	329ea820b9ed23bd
+22	148	7883731329823670	CMakeFiles/CompilerDesign.dir/lexer.c.obj	540991ebca82d2e0
+11	182	7883731330172514	CMakeFiles/CompilerDesign.dir/parser.c.obj	e953ddc59e195265
+182	350	7883731331780999	CompilerDesign.exe	3fc0c15302c01826

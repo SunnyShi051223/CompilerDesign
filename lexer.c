@@ -1,6 +1,9 @@
 /* lexer.c */
 #include "lexer.h"
 #include <ctype.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 static const char *src;
 static int pos = 0;
@@ -10,28 +13,45 @@ void initLexer(const char *source) {
     pos = 0;
 }
 
+const char* getTokenName(int type) {
+    switch(type) {
+        case TOK_END:    return "TOK_END";
+        case TOK_IF:     return "TOK_IF";
+        case TOK_ELSE:   return "TOK_ELSE";
+        case TOK_ID:     return "TOK_ID";
+        case TOK_NUM:    return "TOK_NUM";
+        case TOK_RELOP:  return "TOK_RELOP";
+        case TOK_ASSIGN: return "TOK_ASSIGN";
+        case TOK_PLUS:   return "TOK_PLUS";
+        case TOK_MINUS:  return "TOK_MINUS";
+        case TOK_LPAREN: return "TOK_LPAREN";
+        case TOK_RPAREN: return "TOK_RPAREN";
+        case TOK_LBRACE: return "TOK_LBRACE";
+        case TOK_RBRACE: return "TOK_RBRACE";
+        case TOK_SEMI:   return "TOK_SEMI";
+        default:         return "UNKNOWN";
+    }
+}
+
 Token getToken() {
     Token t;
     char ch = src[pos];
 
-    // 1. 跳过空白符
     while (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
         pos++;
         ch = src[pos];
     }
 
-    // 2. 处理结束符
     if (ch == '\0') {
         t.type = TOK_END;
         strcpy(t.value, "$");
         return t;
     }
 
-    // 3. 识别标识符 (ID) 和 关键字 (Keyword)
     if (isalpha(ch)) {
         int i = 0;
         while (isalnum(ch)) {
-            if (i < 31) t.value[i++] = ch; // 防止溢出
+            if (i < 31) t.value[i++] = ch;
             pos++;
             ch = src[pos];
         }
@@ -43,7 +63,6 @@ Token getToken() {
         return t;
     }
 
-    // 4. 识别数字 (NUM)
     if (isdigit(ch)) {
         int i = 0;
         while (isdigit(ch)) {
@@ -56,60 +75,24 @@ Token getToken() {
         return t;
     }
 
-    // 5. 识别运算符和界符
-    pos++; // 先移动指针，预备读取下一个
+    pos++;
     switch (ch) {
-        // --- 赋值与相等 ---
         case '=':
-            if (src[pos] == '=') {
-                pos++;
-                t.type = TOK_RELOP;
-                strcpy(t.value, "==");
-            } else {
-                t.type = TOK_ASSIGN;
-                strcpy(t.value, "=");
-            }
+            if (src[pos] == '=') { pos++; t.type = TOK_RELOP; strcpy(t.value, "=="); }
+            else { t.type = TOK_ASSIGN; strcpy(t.value, "="); }
             break;
-
-            // --- 大于 & 大于等于 ---
         case '>':
-            if (src[pos] == '=') {
-                pos++;
-                t.type = TOK_RELOP;
-                strcpy(t.value, ">=");
-            } else {
-                t.type = TOK_RELOP;
-                strcpy(t.value, ">");
-            }
+            if (src[pos] == '=') { pos++; t.type = TOK_RELOP; strcpy(t.value, ">="); }
+            else { t.type = TOK_RELOP; strcpy(t.value, ">"); }
             break;
-
-            // --- 小于 & 小于等于 ---
         case '<':
-            if (src[pos] == '=') {
-                pos++;
-                t.type = TOK_RELOP;
-                strcpy(t.value, "<=");
-            } else {
-                t.type = TOK_RELOP;
-                strcpy(t.value, "<");
-            }
+            if (src[pos] == '=') { pos++; t.type = TOK_RELOP; strcpy(t.value, "<="); }
+            else { t.type = TOK_RELOP; strcpy(t.value, "<"); }
             break;
-
-            // --- 不等于 (新增) ---
         case '!':
-            if (src[pos] == '=') {
-                pos++;
-                t.type = TOK_RELOP;
-                strcpy(t.value, "!=");
-            } else {
-                // 如果只是 '!'，在当前C子集中可能是非法语义，或者逻辑非
-                // 这里暂且报错，除非文法支持逻辑非
-                printf("Lexical Error: Unexpected character '!'\n");
-                exit(1);
-            }
+            if (src[pos] == '=') { pos++; t.type = TOK_RELOP; strcpy(t.value, "!="); }
+            else { printf("Lexical Error: Unexpected character '!'\n"); exit(1); }
             break;
-
-            // --- 单字符符号 ---
         case '+': t.type = TOK_PLUS;  strcpy(t.value, "+"); break;
         case '-': t.type = TOK_MINUS; strcpy(t.value, "-"); break;
         case '(': t.type = TOK_LPAREN; strcpy(t.value, "("); break;
@@ -117,7 +100,6 @@ Token getToken() {
         case '{': t.type = TOK_LBRACE; strcpy(t.value, "{"); break;
         case '}': t.type = TOK_RBRACE; strcpy(t.value, "}"); break;
         case ';': t.type = TOK_SEMI;   strcpy(t.value, ";"); break;
-
         default:
             t.type = TOK_END;
             printf("Lexical Error: Unknown character '%c'\n", ch);

@@ -7,87 +7,35 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// ==========================================
-// 内部私有结构体 (仅生成器算法使用)
-// ==========================================
-
 #define IS_TERMINAL(s) ((s) > 0)
 #define IS_NONTERMINAL(s) ((s) < 0)
 #define GET_NT(s) (-(s))
 
-// 非终结符枚举
 typedef enum {
     NT_S = 1, NT_L = 2, NT_E = 3, NT_T = 4, NT_C = 5, NT_M = 6, NT_N = 7
 } NonTerminal;
 
-// 文法规则结构 (生成器用)
-typedef struct {
-    int id;
-    int lhs;
-    int rhs[10];
-    int len;
-} GenRule;
+typedef struct { int id; int lhs; int rhs[10]; int len; } GenRule;
+typedef struct { int ruleIndex; int dotPos; } Item;
+typedef struct { int id; Item items[MAX_ITEMS]; int itemCount; } State;
 
-// 项目 (Item)
-typedef struct {
-    int ruleIndex;
-    int dotPos;
-} Item;
-
-// 状态 (State)
-typedef struct {
-    int id;
-    Item items[MAX_ITEMS];
-    int itemCount;
-} State;
-
-// ==========================================
-// 静态全局变量
-// ==========================================
-
-// 分析表与产生式数组
 static ActionEntry actionTable[MAX_STATES][MAX_CODE_LEN];
 static int gotoTable[MAX_STATES][8];
 static Production prods[PROD_COUNT];
-
-// 分析栈
 static int stateStack[MAX_STACK];
 static SemNode symStack[MAX_STACK];
 static int top = 0;
-
-// 生成器专用变量
 static GenRule rules[MAX_RULES];
 static int ruleCount = 0;
 static State states[MAX_STATES];
 static int stateCount = 0;
 static bool followSet[10][20];
 
-// ==========================================
-// 辅助函数实现
-// ==========================================
+// --- 辅助函数 ---
+static void setProd(int id, int lhs, int len) { prods[id].lhs = lhs; prods[id].len = len; }
+static void setAction(int s, int t, int type, int val) { actionTable[s][t].type = type; actionTable[s][t].val = val; }
+static void setGoto(int s, int nt, int next) { gotoTable[s][nt] = next; }
 
-// 设置运行时产生式信息
-static void setProd(int id, int lhs, int len) {
-    prods[id].lhs = lhs;
-    prods[id].len = len;
-}
-
-// 设置 Action 表项
-static void setAction(int s, int t, int type, int val) {
-    actionTable[s][t].type = type;
-    actionTable[s][t].val = val;
-}
-
-// 设置 Goto 表项
-static void setGoto(int s, int nt, int next) {
-    gotoTable[s][nt] = next;
-}
-
-// ==========================================
-// PART 1: 自动生成算法实现 (Auto Generator)
-// ==========================================
-
-// 1.1 添加文法规则
 static void addRule(int id, int lhs, int r1, int r2, int r3, int r4, int r5, int r6, int r7) {
     int idx = ruleCount++;
     rules[idx].id = id; rules[idx].lhs = lhs;
@@ -101,10 +49,9 @@ static void addRule(int id, int lhs, int r1, int r2, int r3, int r4, int r5, int
     rules[idx].len = len;
 }
 
-// 1.2 初始化文法
 static void initGrammarGenerator() {
     ruleCount = 0;
-    addRule(0, 0, -NT_S, 0, 0, 0, 0, 0, 0); // S' -> S
+    addRule(0, 0, -NT_S, 0, 0, 0, 0, 0, 0);
     addRule(1, NT_S, TOK_ID, TOK_ASSIGN, -NT_E, TOK_SEMI, 0, 0, 0);
     addRule(2, NT_S, TOK_IF, TOK_LPAREN, -NT_C, TOK_RPAREN, -NT_M, -NT_S, 0);
 
@@ -128,11 +75,9 @@ static void initGrammarGenerator() {
     addRule(14, NT_E, -NT_E, TOK_MINUS, -NT_T, 0, 0, 0, 0);
 }
 
-// 1.3 初始化 Follow 集
 static void initFollowSets() {
     memset(followSet, 0, sizeof(followSet));
 #define F(nt, tok) followSet[nt][tok] = true
-
     F(NT_S, TOK_END); F(NT_S, TOK_ELSE); F(NT_S, TOK_RBRACE);
     F(NT_L, TOK_RBRACE); F(NT_L, TOK_IF); F(NT_L, TOK_ID); F(NT_L, TOK_LBRACE);
     F(NT_E, TOK_SEMI); F(NT_E, TOK_PLUS); F(NT_E, TOK_MINUS);
@@ -142,11 +87,7 @@ static void initFollowSets() {
     F(NT_N, TOK_ELSE);
 }
 
-// 1.4 DFA 构建辅助函数
-static bool isSameItem(Item a, Item b) {
-    return a.ruleIndex == b.ruleIndex && a.dotPos == b.dotPos;
-}
-
+static bool isSameItem(Item a, Item b) { return a.ruleIndex == b.ruleIndex && a.dotPos == b.dotPos; }
 static void addItemToState(State *s, Item item) {
     for(int i=0; i<s->itemCount; i++) if(isSameItem(s->items[i], item)) return;
     s->items[s->itemCount++] = item;
@@ -191,7 +132,40 @@ static int findState(State *target) {
     return -1;
 }
 
-// 1.5 核心：自动计算 Action 和 Goto 表
+// 打印分析表
+static void printSLRTable() {
+    printf("\n==================== SLR(1) Analysis Table ====================\n");
+    printf("%-6s |", "State");
+    for(int i=0; i<=TOK_SEMI; i++) {
+        const char* name = getTokenName(i);
+        if(strncmp(name, "TOK_", 4) == 0) name += 4;
+        printf(" %6s |", name);
+    }
+    printf(" %3s | %3s | %3s | %3s | %3s | %3s | %3s |\n", "S", "L", "E", "T", "C", "M", "N");
+    printf("-------+"); for(int i=0; i<=TOK_SEMI; i++) printf("--------+");
+    printf("-----+-----+-----+-----+-----+-----+-----+\n");
+
+    for(int i=0; i<stateCount; i++) {
+        printf("%-6d |", i);
+        for(int j=0; j<=TOK_SEMI; j++) {
+            int type = actionTable[i][j].type;
+            int val = actionTable[i][j].val;
+            char buff[10] = "";
+            if(type == ACT_SHIFT) sprintf(buff, "S%d", val);
+            else if(type == ACT_REDUCE) sprintf(buff, "r%d", val);
+            else if(type == ACT_ACC) sprintf(buff, "acc");
+            else sprintf(buff, " ");
+            printf(" %6s |", buff);
+        }
+        for(int j=1; j<=7; j++) {
+            int next = gotoTable[i][j];
+            if(next != 0) printf(" %3d |", next); else printf("     |");
+        }
+        printf("\n");
+    }
+    printf("===============================================================\n\n");
+}
+
 static void generateSLRTable() {
     printf("[AutoGenerator] Initializing Grammar & Follow Sets...\n");
     initGrammarGenerator();
@@ -207,8 +181,6 @@ static void generateSLRTable() {
     while(processed < stateCount) {
         State *current = &states[processed];
         int symbols[50]; int symCount = 0;
-
-        // 收集转移符号
         for(int i=0; i<current->itemCount; i++) {
             Item it = current->items[i];
             GenRule r = rules[it.ruleIndex];
@@ -219,8 +191,6 @@ static void generateSLRTable() {
                 if(!has) symbols[symCount++] = sym;
             }
         }
-
-        // GOTO 运算
         for(int k=0; k<symCount; k++) {
             int X = symbols[k];
             State newState; newState.itemCount = 0;
@@ -246,16 +216,13 @@ static void generateSLRTable() {
         processed++;
     }
 
-    // 填充 REDUCE 和 ACC
     for(int i=0; i<stateCount; i++) {
         for(int j=0; j<states[i].itemCount; j++) {
             Item it = states[i].items[j];
             GenRule r = rules[it.ruleIndex];
             if(it.dotPos == r.len) {
-                if(r.lhs == 0) {
-                    setAction(i, TOK_END, ACT_ACC, 0);
-                } else {
-                    // 遍历所有 Token (包括 TOK_END = 0)
+                if(r.lhs == 0) setAction(i, TOK_END, ACT_ACC, 0);
+                else {
                     for(int t=0; t<20; t++) {
                         if(followSet[r.lhs][t]) setAction(i, t, ACT_REDUCE, r.id);
                     }
@@ -264,35 +231,25 @@ static void generateSLRTable() {
         }
     }
     printf("[AutoGenerator] Table Generation Complete! Total States: %d\n", stateCount);
+    printSLRTable();
 }
 
-// ==========================================
-// PART 2: Parser 驱动程序 (Driver)
-// ==========================================
-
-// 初始化
 static void initParser() {
-    // 1. 初始化运行时产生式信息
     setProd(1, 1, 4); setProd(2, 1, 6); setProd(3, 1, 10); setProd(4, 1, 3);
     setProd(5, 2, 3); setProd(6, 2, 1); setProd(7, 3, 3); setProd(8, 3, 1);
     setProd(9, 4, 1); setProd(10, 4, 1); setProd(11, 5, 3); setProd(12, 6, 0);
     setProd(13, 7, 0); setProd(14, 3, 3);
-
-    // 2. 清空表格
     memset(actionTable, 0, sizeof(actionTable));
     memset(gotoTable, 0, sizeof(gotoTable));
-
-    // 3. 执行自动生成
     generateSLRTable();
 }
 
-// 对外接口：启动分析
 void SLR1_Parser() {
     initParser();
     stateStack[top] = 0;
     Token token = getToken();
 
-    printf("Starting SLR(1) Parser...\n");
+    printf("Starting SLR(1) Parser Analysis...\n");
 
     while(1) {
         int s = stateStack[top];
@@ -306,31 +263,26 @@ void SLR1_Parser() {
             printf("SHIFT  %-5s -> State %d\n", token.value, act.val);
             top++;
             stateStack[top] = act.val;
-
-            // 语义栈操作
             strcpy(symStack[top].name, token.value);
             symStack[top].tl_count = symStack[top].fl_count = symStack[top].nl_count = 0;
-
             token = getToken();
         }
         else if (act.type == ACT_REDUCE) {
             int prodID = act.val;
             int len = prods[prodID].len;
             int lhs = prods[prodID].lhs;
-
             printf("REDUCE Rule %d\n", prodID);
 
             SemNode newVal;
-            // 语义属性初始化
             newVal.tl_count = newVal.fl_count = newVal.nl_count = 0;
             newVal.quad = 0;
             memset(newVal.name, 0, sizeof(newVal.name));
 
-            // 执行语义动作
             switch(prodID) {
                 case 1: // S -> id = E ;
                     emit("=", symStack[top-1].name, "-", 0, 0);
-                    sprintf(quadArray[NXQ-1].arg2, "%s", symStack[top-3].name);
+                    // 修正：将赋值语句的左值 id (symStack[top-3].name) 存入 res 字段
+                    strcpy(quadArray[NXQ-1].res, symStack[top-3].name);
                     break;
                 case 2: // S -> if ( C ) M S
                     backpatch(symStack[top-3].trueList, symStack[top-3].tl_count, symStack[top-1].quad);
@@ -362,7 +314,8 @@ void SLR1_Parser() {
                 case 7: // E -> E + T
                     strcpy(newVal.name, newTemp());
                     emit("+", symStack[top-2].name, symStack[top].name, 0, 0);
-                    sprintf(quadArray[NXQ-1].arg2, "%s", newVal.name);
+                    // 修正：将结果变量名存入 res 字段
+                    strcpy(quadArray[NXQ-1].res, newVal.name);
                     break;
                 case 8: // E -> T
                     strcpy(newVal.name, symStack[top].name);
@@ -389,13 +342,13 @@ void SLR1_Parser() {
                 case 14: // E -> E - T
                     strcpy(newVal.name, newTemp());
                     emit("-", symStack[top-2].name, symStack[top].name, 0, 0);
-                    sprintf(quadArray[NXQ-1].arg2, "%s", newVal.name);
+                    // 修正：将结果变量名存入 res 字段
+                    strcpy(quadArray[NXQ-1].res, newVal.name);
                     break;
             }
 
             top -= len;
             int nextState = gotoTable[stateStack[top]][lhs];
-
             top++;
             stateStack[top] = nextState;
             symStack[top] = newVal;
