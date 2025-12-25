@@ -12,14 +12,6 @@ int main() {
     size_t len;
 
     fp = fopen("Test.txt", "r");
-    if (fp == NULL) {
-        // 创建默认测试用例
-        fp = fopen("Test.txt", "w");
-        fprintf(fp, "if(a>b){\n    a=b;\n}\nelse{\n    if(a==b){\n        a=a+1;\n    }\n    else if(a<b){\n        b=b-1;\n    }\n}");
-        fclose(fp);
-        fp = fopen("Test.txt", "r");
-        if(fp == NULL) { perror("File Error"); return 1; }
-    }
 
     len = fread(code, 1, MAX_CODE_LEN - 1, fp);
     code[len] = '\0';
