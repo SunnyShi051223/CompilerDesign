@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// 对应报告图 2.2.2 的 DFA 状态定义
+// DFA 状态定义
 typedef enum {
     S0,         // 初态
     Sid,        // 标识符状态
@@ -25,7 +25,7 @@ void initLexer(const char *source) {
     pos = 0;
 }
 
-// 辅助函数：判断是否为界符 (对应报告中的 BOUNDARY)
+// 辅助函数：判断是否为界符
 static int isBoundary(char ch) {
     return strchr("(){};", ch) != NULL;
 }
@@ -72,7 +72,7 @@ Token getToken() {
                     state = DONE;
                 }
                 else if (isspace(ch)) {
-                    // 报告表2.2.2: WS -> S0 (忽略空白，保持初态)
+                    // WS -> S0 (忽略空白，保持初态)
                     // 实际上是重新开始循环，不做任何操作
                 }
                 else if (isalpha(ch)) {

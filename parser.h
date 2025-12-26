@@ -5,6 +5,10 @@
 #ifndef COMPILERDESIGN_PARSER_H
 #define COMPILERDESIGN_PARSER_H
 
+#include <stdbool.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "common.h"
 
 #define PROD_COUNT 15
@@ -24,6 +28,36 @@ typedef struct {
     int lhs;
     int len;
 } Production;
+
+#define IS_TERMINAL(s) ((s) > 0)
+#define IS_NONTERMINAL(s) ((s) < 0)
+#define GET_NT(s) (-(s))
+
+typedef enum {
+    NT_S = 1, NT_L = 2, NT_E = 3, NT_T = 4, NT_C = 5, NT_M = 6, NT_N = 7
+} NonTerminal;
+
+typedef struct { int id; int lhs; int rhs[10]; int len; } GenRule;
+typedef struct { int ruleIndex; int dotPos; } Item;
+typedef struct { int id; Item items[MAX_ITEMS]; int itemCount; } State;
+
+static ActionEntry actionTable[MAX_STATES][MAX_CODE_LEN];
+static int gotoTable[MAX_STATES][8];
+static Production prods[PROD_COUNT];
+static int stateStack[MAX_STACK];
+static SemNode symStack[MAX_STACK];
+static int top = 0;
+static GenRule rules[MAX_RULES];
+static int ruleCount = 0;
+static State states[MAX_STATES];
+static int stateCount = 0;
+static bool followSet[10][20];
+
+// --- 辅助函数 ---
+static void setProd(int id, int lhs, int len) { prods[id].lhs = lhs; prods[id].len = len; }
+static void setAction(int s, int t, int type, int val) { actionTable[s][t].type = type; actionTable[s][t].val = val; }
+static void setGoto(int s, int nt, int next) { gotoTable[s][nt] = next; }
+
 
 void SLR1_Parser();
 

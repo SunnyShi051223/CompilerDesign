@@ -35,7 +35,7 @@ typedef struct {
     char value[32];
 } Token;
 
-// --- 四元式 (修改版) ---
+// --- 四元式---
 typedef struct {
     char op[10];      // 操作符
     char arg1[10];    // 操作数1

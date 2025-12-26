@@ -56,7 +56,7 @@ void printQuads() {
     for(int i=0; i<NXQ; i++) {
         printf("%-5d (%-5s, %-5s, %-5s, ", i, quadArray[i].op, quadArray[i].arg1, quadArray[i].arg2);
 
-        // 核心修正：如果是跳转指令，打印数字；如果是运算指令，打印字符串变量名
+        //如果是跳转指令，打印数字；如果是运算指令，打印字符串变量名
         if (quadArray[i].isJump) {
             printf("%d)\n", quadArray[i].result);
         } else {

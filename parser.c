@@ -2,39 +2,7 @@
 #include "parser.h"
 #include "lexer.h"
 #include "semantic.h"
-#include <stdbool.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
 
-#define IS_TERMINAL(s) ((s) > 0)
-#define IS_NONTERMINAL(s) ((s) < 0)
-#define GET_NT(s) (-(s))
-
-typedef enum {
-    NT_S = 1, NT_L = 2, NT_E = 3, NT_T = 4, NT_C = 5, NT_M = 6, NT_N = 7
-} NonTerminal;
-
-typedef struct { int id; int lhs; int rhs[10]; int len; } GenRule;
-typedef struct { int ruleIndex; int dotPos; } Item;
-typedef struct { int id; Item items[MAX_ITEMS]; int itemCount; } State;
-
-static ActionEntry actionTable[MAX_STATES][MAX_CODE_LEN];
-static int gotoTable[MAX_STATES][8];
-static Production prods[PROD_COUNT];
-static int stateStack[MAX_STACK];
-static SemNode symStack[MAX_STACK];
-static int top = 0;
-static GenRule rules[MAX_RULES];
-static int ruleCount = 0;
-static State states[MAX_STATES];
-static int stateCount = 0;
-static bool followSet[10][20];
-
-// --- 辅助函数 ---
-static void setProd(int id, int lhs, int len) { prods[id].lhs = lhs; prods[id].len = len; }
-static void setAction(int s, int t, int type, int val) { actionTable[s][t].type = type; actionTable[s][t].val = val; }
-static void setGoto(int s, int nt, int next) { gotoTable[s][nt] = next; }
 
 static void addRule(int id, int lhs, int r1, int r2, int r3, int r4, int r5, int r6, int r7) {
     int idx = ruleCount++;
@@ -284,7 +252,6 @@ void SLR1_Parser() {
             switch(prodID) {
                 case 1: // S -> id = E ;
                     emit("=", symStack[top-1].name, "-", 0, 0);
-                    // 修正：将赋值语句的左值 id (symStack[top-3].name) 存入 res 字段
                     strcpy(quadArray[NXQ-1].res, symStack[top-3].name);
                     break;
                 case 2: // S -> if ( C ) M S
@@ -317,7 +284,6 @@ void SLR1_Parser() {
                 case 7: // E -> E + T
                     strcpy(newVal.name, newTemp());
                     emit("+", symStack[top-2].name, symStack[top].name, 0, 0);
-                    // 修正：将结果变量名存入 res 字段
                     strcpy(quadArray[NXQ-1].res, newVal.name);
                     break;
                 case 8: // E -> T
@@ -345,7 +311,6 @@ void SLR1_Parser() {
                 case 14: // E -> E - T
                     strcpy(newVal.name, newTemp());
                     emit("-", symStack[top-2].name, symStack[top].name, 0, 0);
-                    // 修正：将结果变量名存入 res 字段
                     strcpy(quadArray[NXQ-1].res, newVal.name);
                     break;
             }
