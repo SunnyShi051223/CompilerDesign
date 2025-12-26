@@ -40,8 +40,8 @@ typedef struct {
     char op[10];      // 操作符
     char arg1[10];    // 操作数1
     char arg2[10];    // 操作数2
-    char res[10];     // [新增] 字符串结果 (用于存储变量名 T1, a 等)
-    int result;       // [原有] 整数结果 (用于存储跳转行号 10, 2 等)
+    char res[10];     // 字符串结果 (用于存储变量名 T1, a 等)
+    int result;       // 整数结果 (用于存储跳转行号 10, 2 等)
     int isJump;       // 1: 跳转指令, 0: 运算/赋值指令
 } Quad;
 

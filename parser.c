@@ -3,7 +3,7 @@
 #include "lexer.h"
 #include "semantic.h"
 
-
+//添加文法规则
 static void addRule(int id, int lhs, int r1, int r2, int r3, int r4, int r5, int r6, int r7) {
     int idx = ruleCount++;
     rules[idx].id = id; rules[idx].lhs = lhs;
@@ -17,32 +17,63 @@ static void addRule(int id, int lhs, int r1, int r2, int r3, int r4, int r5, int
     rules[idx].len = len;
 }
 
+//录入产生式15条
 static void initGrammarGenerator() {
     ruleCount = 0;
+
+    // 规则 0: S' -> S (拓广文法的开始符号，S' -> Statement)
     addRule(0, 0, -NT_S, 0, 0, 0, 0, 0, 0);
+
+    // 规则 1: S -> id = E ; (赋值语句)
     addRule(1, NT_S, TOK_ID, TOK_ASSIGN, -NT_E, TOK_SEMI, 0, 0, 0);
+
+    // 规则 2: S -> if ( C ) M S (不带 else 的 if 语句)
+    // M 是标记非终结符，用于记录回填地址
     addRule(2, NT_S, TOK_IF, TOK_LPAREN, -NT_C, TOK_RPAREN, -NT_M, -NT_S, 0);
 
-    // Rule 3: S -> if ( C ) M S N else M S
+    // 规则 3: S -> if ( C ) M S N else M S (带 else 的 if 语句)
+    // N 用于在 if 执行完后跳过 else 部分
     rules[ruleCount].id = 3; rules[ruleCount].lhs = NT_S;
     int r3[] = {TOK_IF, TOK_LPAREN, -NT_C, TOK_RPAREN, -NT_M, -NT_S, -NT_N, TOK_ELSE, -NT_M, -NT_S};
     for(int i=0; i<10; i++) rules[ruleCount].rhs[i] = r3[i];
     rules[ruleCount].len = 10;
     ruleCount++;
 
+    // 规则 4: S -> { L } (复合语句/代码块)
     addRule(4, NT_S, TOK_LBRACE, -NT_L, TOK_RBRACE, 0, 0, 0, 0);
+
+    // 规则 5: L -> L M S (语句列表的递归定义，M用于连接多条语句的控制流)
     addRule(5, NT_L, -NT_L, -NT_M, -NT_S, 0, 0, 0, 0);
+
+    // 规则 6: L -> S (语句列表的单个语句情况)
     addRule(6, NT_L, -NT_S, 0, 0, 0, 0, 0, 0);
+
+    // 规则 7: E -> E + T (加法表达式)
     addRule(7, NT_E, -NT_E, TOK_PLUS, -NT_T, 0, 0, 0, 0);
+
+    // 规则 8: E -> T (表达式由单个项组成)
     addRule(8, NT_E, -NT_T, 0, 0, 0, 0, 0, 0);
+
+    // 规则 9: T -> id (项是变量)
     addRule(9, NT_T, TOK_ID, 0, 0, 0, 0, 0, 0);
+
+    // 规则 10: T -> num (项是常数)
     addRule(10, NT_T, TOK_NUM, 0, 0, 0, 0, 0, 0);
+
+    // 规则 11: C -> T relop T (条件表达式，如 a < b)
     addRule(11, NT_C, -NT_T, TOK_RELOP, -NT_T, 0, 0, 0, 0);
+
+    // 规则 12: M -> ε (空产生式，M 不消耗任何 Token，仅产生语义动作：记录当前指令地址)
     addRule(12, NT_M, 0, 0, 0, 0, 0, 0, 0);
+
+    // 规则 13: N -> ε (空产生式，N 不消耗 Token，仅产生语义动作：生成跳转指令)
     addRule(13, NT_N, 0, 0, 0, 0, 0, 0, 0);
+
+    // 规则 14: E -> E - T (减法表达式)
     addRule(14, NT_E, -NT_E, TOK_MINUS, -NT_T, 0, 0, 0, 0);
 }
 
+//初始化Follow集-手算
 static void initFollowSets() {
     memset(followSet, 0, sizeof(followSet));
 #define F(nt, tok) followSet[nt][tok] = true
@@ -58,12 +89,14 @@ static void initFollowSets() {
     F(NT_N, TOK_ELSE);
 }
 
+//LR（0）项目集操作：判断两个项目是否相同，向状态中添加新项目
 static bool isSameItem(Item a, Item b) { return a.ruleIndex == b.ruleIndex && a.dotPos == b.dotPos; }
 static void addItemToState(State *s, Item item) {
     for(int i=0; i<s->itemCount; i++) if(isSameItem(s->items[i], item)) return;
     s->items[s->itemCount++] = item;
 }
 
+//求闭包
 static void closure(State *s) {
     bool changed = true;
     while(changed) {
@@ -88,6 +121,7 @@ static void closure(State *s) {
     }
 }
 
+//查找状态
 static int findState(State *target) {
     for(int i=0; i<stateCount; i++) {
         if(states[i].itemCount != target->itemCount) continue;
@@ -137,8 +171,11 @@ static void printSLRTable() {
     printf("===============================================================\n\n");
 }
 
+//自动表生成
 static void generateSLRTable() {
     printf("[AutoGenerator] Initializing Grammar & Follow Sets...\n");
+
+    //1.初始化DFA
     initGrammarGenerator();
     initFollowSets();
 
@@ -148,6 +185,7 @@ static void generateSLRTable() {
     Item startItem = {0, 0}; addItemToState(&states[0], startItem); closure(&states[0]);
     stateCount++;
 
+    //2.循环构建项目集规范族
     int processed = 0;
     while(processed < stateCount) {
         State *current = &states[processed];
@@ -180,6 +218,7 @@ static void generateSLRTable() {
                     newState.id = stateCount; states[stateCount] = newState;
                     nextStateId = stateCount; stateCount++;
                 }
+                //移进
                 if(IS_TERMINAL(X)) setAction(processed, X, ACT_SHIFT, nextStateId);
                 else setGoto(processed, GET_NT(X), nextStateId);
             }
@@ -191,6 +230,8 @@ static void generateSLRTable() {
         for(int j=0; j<states[i].itemCount; j++) {
             Item it = states[i].items[j];
             GenRule r = rules[it.ruleIndex];
+
+            //如果圆点在最后，归约项目
             if(it.dotPos == r.len) {
                 if(r.lhs == 0) setAction(i, TOK_END, ACT_ACC, 0);
                 else {
@@ -205,6 +246,7 @@ static void generateSLRTable() {
     printSLRTable();
 }
 
+//初始化语法分析
 static void initParser() {
     setProd(1, 1, 4); setProd(2, 1, 6); setProd(3, 1, 10); setProd(4, 1, 3);
     setProd(5, 2, 3); setProd(6, 2, 1); setProd(7, 3, 3); setProd(8, 3, 1);
@@ -250,7 +292,7 @@ void SLR1_Parser() {
             memset(newVal.name, 0, sizeof(newVal.name));
 
             switch(prodID) {
-                case 1: // S -> id = E ;
+                case 1: // S -> id = E ; 赋值
                     emit("=", symStack[top-1].name, "-", 0, 0);
                     strcpy(quadArray[NXQ-1].res, symStack[top-3].name);
                     break;
@@ -293,7 +335,7 @@ void SLR1_Parser() {
                 case 10: // T -> num
                     strcpy(newVal.name, symStack[top].name);
                     break;
-                case 11: // C -> T relop T
+                case 11: // C -> T relop T 跳转指令
                     makeList(&newVal, NXQ, 0);
                     makeList(&newVal, NXQ+1, 1);
                     emit("j", symStack[top-2].name, symStack[top].name, 0, 1);

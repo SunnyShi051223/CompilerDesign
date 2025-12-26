@@ -5,6 +5,7 @@ Quad quadArray[MAX_QUADS];
 int NXQ = 0;
 int tempCount = 0;
 
+//生成四元式
 void emit(char *op, char *arg1, char *arg2, int result, int isJump) {
     strcpy(quadArray[NXQ].op, op);
     strcpy(quadArray[NXQ].arg1, arg1);

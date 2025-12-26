@@ -112,10 +112,10 @@ Token getToken() {
 
             case Sid: // --- 标识符状态 ---
                 if (isalnum(ch)) {
-                    // 报告: Letter/Digit -> Sid
+                    // Letter/Digit -> Sid
                     if (i < 31) t.value[i++] = ch;
                 } else {
-                    // 报告: 其他字符 -> Zdone (标识符结束，需回退)
+                    // 其他字符 -> Zdone (标识符结束，需回退)
                     pos--; // 回退字符 (Retract)
                     t.value[i] = '\0';
                     // 查表判断是 Keyword 还是 ID
@@ -128,10 +128,10 @@ Token getToken() {
 
             case Snum: // --- 常数状态 ---
                 if (isdigit(ch)) {
-                    // 报告: Digit -> Snum
+                    // Digit -> Snum
                     if (i < 31) t.value[i++] = ch;
                 } else {
-                    // 报告: 其他字符 -> Znum (需回退)
+                    // 其他字符 -> Znum (需回退)
                     pos--;
                     t.value[i] = '\0';
                     t.type = TOK_NUM;
@@ -141,12 +141,12 @@ Token getToken() {
 
             case S_less: // --- < 状态 ---
                 if (ch == '=') {
-                    // 报告: = -> Zrelop (<=)
+                    // = -> Zrelop (<=)
                     t.value[i++] = ch; t.value[i] = '\0';
                     t.type = TOK_RELOP;
                     state = DONE;
                 } else {
-                    // 报告: 其他 -> Zrelop (<)，需回退
+                    // 其他 -> Zrelop (<)，需回退
                     pos--;
                     t.type = TOK_RELOP;
                     state = DONE;
@@ -167,12 +167,12 @@ Token getToken() {
 
             case S_eq: // --- = 状态 ---
                 if (ch == '=') {
-                    // 报告: = -> Zrelop (==)
+                    // = -> Zrelop (==)
                     t.value[i++] = ch; t.value[i] = '\0';
                     t.type = TOK_RELOP;
                     state = DONE;
                 } else {
-                    // 报告: 其他 -> Zassign (=)，需回退
+                    // 其他 -> Zassign (=)，需回退
                     pos--;
                     t.type = TOK_ASSIGN;
                     state = DONE;
@@ -181,12 +181,12 @@ Token getToken() {
 
             case S_not: // --- ! 状态 ---
                 if (ch == '=') {
-                    // 报告: = -> Zrelop (!=)
+                    // = -> Zrelop (!=)
                     t.value[i++] = ch; t.value[i] = '\0';
                     t.type = TOK_RELOP;
                     state = DONE;
                 } else {
-                    // 报告: 其他 -> Zerr (非法单独 !)
+                    // 其他 -> Zerr (非法单独 !)
                     printf("[Lexical Error] Unexpected character '!' without '='.\n");
                     exit(1);
                 }
